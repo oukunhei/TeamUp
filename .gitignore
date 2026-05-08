@@ -1,0 +1,73 @@
+# 环境变量文件（敏感信息）
+.env
+.env.local
+.env.*.local
+.env.development
+.env.production
+
+# 依赖和构建输出
+node_modules/
+dist/
+build/
+.next/
+out/
+
+# 包管理器文件
+package-lock.json
+yarn.lock
+pnpm-lock.yaml
+bun.lockb
+
+# IDE 和编辑器配置
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+.sublime-project
+.sublime-workspace
+*.code-workspace
+.history/
+.env.*.local
+
+# 系统文件
+Thumbs.db
+.Thumbs.db
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+*.log
+
+# Prisma
+prisma/dev.db
+prisma/dev.db-shm
+prisma/dev.db-wal
+.prisma/
+
+# 本地开发
+.env.test
+.env.test.local
+*.tmp
+tmp/
+temp/
+
+# OS-specific
+.env.local.example
+*.pem
+*.key
+*.cert
+
+# 其他
+.cache/
+.gradle/
+.terraform/
+dist
