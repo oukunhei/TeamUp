@@ -57,7 +57,7 @@ Start all services with one command:
 
 ```bash
 # Clone the repo
-git clone <repository-url>
+git clone https://github.com/oukunhei/TeamUp.git
 cd teamup
 
 # Start all services

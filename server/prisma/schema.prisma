@@ -1,0 +1,285 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==================== 用户系统 ====================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  studentId String?  @unique @map("student_id")
+  name      String
+  avatar    String?
+  bio       String?
+  // skills 以 JSON 数组存储，如 ["React", "Python", "UI Design"]
+  skills    String[] @default([])
+  role      UserRole @default(USER)
+  password  String
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  ownedSpaces   Space[]       @relation("SpaceOwner")
+  memberships   SpaceMember[]
+  ideas         Idea[]        @relation("IdeaHolder")
+  applications  Application[] @relation("Applicant")
+  receivedApps  Application[] @relation("ApplicationHolder")
+  ideaMembers   IdeaMember[]
+  notifications Notification[]
+  documents     Document[]    @relation("DocumentUploader")
+  documentVersions DocumentVersion[] @relation("DocVersionUploader")
+
+  @@map("users")
+}
+
+enum UserRole {
+  USER
+  TEACHER
+  ADMIN
+}
+
+// ==================== 空间系统 ====================
+
+model Space {
+  id          String    @id @default(uuid())
+  name        String
+  description String?
+  // OPEN: 开放空间, COURSE: 课程空间
+  type        SpaceType
+  // 课程空间特有
+  courseCode  String?   @map("course_code")
+  courseName  String?   @map("course_name")
+  semester    String?
+  // 加入方式
+  joinCode    String?   @unique @map("join_code")
+  isPublic    Boolean   @default(true) @map("is_public")
+
+  ownerId String @map("owner_id")
+  owner   User   @relation("SpaceOwner", fields: [ownerId], references: [id])
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  members SpaceMember[]
+  ideas   Idea[]
+
+  @@map("spaces")
+}
+
+enum SpaceType {
+  OPEN
+  COURSE
+}
+
+model SpaceMember {
+  id     String @id @default(uuid())
+  spaceId String @map("space_id")
+  userId  String @map("user_id")
+  // 课程空间中：MEMBER (学生), TEACHER, TA
+  role   SpaceMemberRole @default(MEMBER)
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  space Space @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([spaceId, userId])
+  @@map("space_members")
+}
+
+enum SpaceMemberRole {
+  MEMBER
+  TEACHER
+  TA
+}
+
+// ==================== 创意 (Idea) 系统 ====================
+
+model Idea {
+  id          String    @id @default(uuid())
+  title       String
+  // 公开概述 (所有人可见)
+  summary     String    @db.Text
+  // 详细内容 (仅核心成员可见)
+  detail      String?   @db.Text
+  // 所需技能标签
+  requiredSkills String[] @default([]) @map("required_skills")
+  // 期望人数
+  teamSize    Int?      @map("team_size")
+  // 当前状态
+  status      IdeaStatus @default(DRAFT)
+  // 时间戳防抄袭
+  hash        String?   @unique
+  timestampedAt DateTime? @map("timestamped_at")
+
+  holderId String @map("holder_id")
+  holder   User   @relation("IdeaHolder", fields: [holderId], references: [id])
+
+  spaceId String? @map("space_id")
+  space   Space?  @relation(fields: [spaceId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  // 关系
+  applications Application[]
+  documents    Document[]
+  members      IdeaMember[]
+
+  @@map("ideas")
+}
+
+enum IdeaStatus {
+  DRAFT       // 草稿，仅创建者可见
+  PUBLISHED   // 已发布，公开概述
+  RECRUITING  // 招募中
+  IN_PROGRESS // 进行中
+  COMPLETED   // 已完成
+}
+
+// 创意核心成员 (可见详细内容并参与编辑)
+model IdeaMember {
+  id     String @id @default(uuid())
+  ideaId String @map("idea_id")
+  userId String @map("user_id")
+  role   IdeaMemberRole @default(MEMBER)
+
+  joinedAt DateTime @default(now()) @map("joined_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([ideaId, userId])
+  @@map("idea_members")
+}
+
+enum IdeaMemberRole {
+  HOLDER  // 发起人
+  MEMBER  // 核心成员
+}
+
+// ==================== 加入申请 ====================
+
+model Application {
+  id      String @id @default(uuid())
+  ideaId  String @map("idea_id")
+  userId  String @map("user_id")
+  // 申请留言
+  message String? @db.Text
+  // 申请状态
+  status  ApplicationStatus @default(PENDING)
+  // 审批回复
+  reply   String? @db.Text
+  // 是否给予只读权限（双向筛选的中间状态）
+  isViewer Boolean @default(false) @map("is_viewer")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  idea Idea @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  user User @relation("Applicant", fields: [userId], references: [id], onDelete: Cascade)
+  // 用于通知：记录审批人
+  holder   User?   @relation("ApplicationHolder", fields: [holderId], references: [id])
+  holderId String? @map("holder_id")
+
+  @@map("applications")
+}
+
+enum ApplicationStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  WITHDRAWN
+}
+
+// ==================== 文档系统 ====================
+
+model Document {
+  id       String @id @default(uuid())
+  ideaId   String @map("idea_id")
+  name     String
+  // 文件类型: ppt, pptx, doc, docx, pdf, md, image, code 等
+  type     String
+  mimeType String @map("mime_type")
+  // 存储路径 (当前最新版本)
+  path     String
+  // 文件大小 (字节)
+  size     Int
+  // 文件 Hash (SHA256)
+  fileHash String? @map("file_hash")
+  // 当前版本号
+  version  Int    @default(1)
+  // 上传者
+  uploadedBy String @map("uploaded_by")
+
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  idea     Idea     @relation(fields: [ideaId], references: [id], onDelete: Cascade)
+  uploader User     @relation("DocumentUploader", fields: [uploadedBy], references: [id])
+  versions DocumentVersion[]
+
+  @@map("documents")
+}
+
+// 文档版本历史
+model DocumentVersion {
+  id           String @id @default(uuid())
+  documentId   String @map("document_id")
+  versionNumber Int   @map("version_number")
+  // 存储路径
+  storageKey   String @map("storage_key")
+  // 文件大小
+  fileSize     Int    @map("file_size")
+  // 文件 Hash
+  fileHash     String? @map("file_hash")
+  // 上传者
+  uploadedBy   String @map("uploaded_by")
+  // 版本备注
+  comment      String?
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  uploader User     @relation("DocVersionUploader", fields: [uploadedBy], references: [id])
+
+  @@unique([documentId, versionNumber])
+  @@map("document_versions")
+}
+
+// ==================== 通知系统 ====================
+
+model Notification {
+  id      String @id @default(uuid())
+  userId  String @map("user_id")
+  type    NotificationType
+  title   String
+  content String? @db.Text
+  // 关联数据 JSON
+  meta    String? @db.Text
+  isRead  Boolean @default(false) @map("is_read")
+
+  createdAt DateTime @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("notifications")
+}
+
+enum NotificationType {
+  APPLICATION_RECEIVED
+  APPLICATION_APPROVED
+  APPLICATION_REJECTED
+  APPLICATION_VIEWER
+  MEMBER_JOINED
+  DOCUMENT_UPLOADED
+  IDEA_UPDATED
+  SYSTEM
+}

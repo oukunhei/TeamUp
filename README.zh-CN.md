@@ -57,7 +57,7 @@
 
 ```bash
 # 克隆项目
-git clone <repository-url>
+git clone https://github.com/oukunhei/TeamUp.git
 cd teamup
 
 # 启动所有服务
