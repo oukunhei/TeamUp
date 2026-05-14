@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import { useAuthStore } from "@/stores/auth";
 import { ideaApi, applicationApi, notificationApi } from "@/services/api";
 import { Idea, Application, Notification } from "@/types";
-import { Lightbulb, Send, Inbox, Bell, Loader2, CheckCircle } from "lucide-react";
+import ApplicationDetailModal from "@/components/ApplicationDetailModal";
+import { Lightbulb, Send, Inbox, Bell, Loader2, CheckCircle, Eye, MessageSquare } from "lucide-react";
 
 export default function Dashboard() {
   const user = useAuthStore((s) => s.user);
@@ -12,19 +13,52 @@ export default function Dashboard() {
   const [receivedApps, setReceivedApps] = useState<Application[]>([]);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
+  const [detailApp, setDetailApp] = useState<Application | null>(null);
+
+  const fetchData = async () => {
+    if (!user) return;
+    setLoading(true);
+    try {
+      const [ideasRes, sentRes, receivedRes, notifRes] = await Promise.all([
+        ideaApi.list({ holderId: user.id }),
+        applicationApi.sent(),
+        applicationApi.received(),
+        notificationApi.list({ unreadOnly: false }),
+      ]);
+      setMyIdeas(ideasRes.data);
+      setSentApps(sentRes.data);
+      setReceivedApps(receivedRes.data);
+      setNotifications(notifRes.data);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    Promise.all([
-      ideaApi.list({}).then((r) => setMyIdeas(r.data.filter((i: Idea) => i.holderId === user?.id))),
-      applicationApi.sent().then((r) => setSentApps(r.data)),
-      applicationApi.received().then((r) => setReceivedApps(r.data)),
-      notificationApi.list({ unreadOnly: false }).then((r) => setNotifications(r.data)),
-    ]).finally(() => setLoading(false));
+    fetchData();
   }, [user?.id]);
 
   const markAllRead = async () => {
     await notificationApi.readAll();
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
+  };
+
+  const handleReview = async (appId: string, status: "APPROVED" | "REJECTED" | "VIEWER", reply?: string) => {
+    try {
+      await applicationApi.review(appId, { status, reply });
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "操作失败");
+    }
+  };
+
+  const handlePromote = async (appId: string) => {
+    try {
+      await applicationApi.promote(appId);
+      fetchData();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "操作失败");
+    }
   };
 
   if (!user) return <div className="text-center py-20 text-gray-500">请先登录</div>;
@@ -86,16 +120,54 @@ export default function Dashboard() {
               <div className="space-y-2">
                 {receivedApps.slice(0, 10).map((app) => (
                   <div key={app.id} className="bg-gray-50 rounded-lg p-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <span className="font-medium text-sm">{app.user?.name}</span>
-                        <span className="text-xs text-gray-500">申请加入「{app.idea?.title}」</span>
+                    <div className="flex items-center justify-between mb-1">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className="font-medium text-sm truncate">{app.user?.name}</span>
+                        <span className="text-xs text-gray-500 truncate">申请加入「{app.idea?.title}」</span>
                       </div>
                       <AppStatusBadge status={app.status} isViewer={app.isViewer} />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => setDetailApp(app)}
+                        className="text-xs bg-white border text-gray-700 px-2 py-1 rounded-md font-medium hover:bg-gray-50 flex items-center gap-1"
+                      >
+                        <MessageSquare className="w-3 h-3" /> 查看详情
+                      </button>
+                      {app.status === "PENDING" && (
+                        <>
+                          <button
+                            onClick={() => handleReview(app.id, "VIEWER")}
+                            className="text-xs bg-amber-100 text-amber-700 px-2 py-1 rounded-md font-medium hover:bg-amber-200 flex items-center gap-1"
+                          >
+                            <Eye className="w-3 h-3" /> 给只读权限
+                          </button>
+                          <button
+                            onClick={() => handleReview(app.id, "APPROVED")}
+                            className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-md font-medium hover:bg-green-200 flex items-center gap-1"
+                          >
+                            <CheckCircle className="w-3 h-3" /> 通过
+                          </button>
+                        </>
+                      )}
+                      <Link
+                        to={`/ideas/${app.ideaId}`}
+                        className="text-xs text-primary-600 hover:underline ml-auto"
+                      >
+                        查看项目 →
+                      </Link>
                     </div>
                   </div>
                 ))}
               </div>
+            )}
+            {detailApp && (
+              <ApplicationDetailModal
+                app={detailApp}
+                onReview={handleReview}
+                onPromote={handlePromote}
+                onClose={() => setDetailApp(null)}
+              />
             )}
           </Section>
         </div>

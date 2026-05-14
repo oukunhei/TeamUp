@@ -55,11 +55,12 @@ export const createIdea = async (req: AuthRequest, res: Response) => {
 };
 
 export const listIdeas = async (req: Request, res: Response) => {
-  const { status, spaceId, skill, search } = req.query;
+  const { status, spaceId, skill, search, holderId } = req.query;
 
   const ideas = await prisma.idea.findMany({
     where: {
-      status: status ? (status as string) : { in: ["PUBLISHED", "RECRUITING", "IN_PROGRESS"] },
+      status: status ? (status as string) : holderId ? undefined : { in: ["PUBLISHED", "RECRUITING", "IN_PROGRESS"] },
+      ...(holderId && { holderId: holderId as string }),
       ...(spaceId && { spaceId: spaceId as string }),
       ...(skill && { requiredSkills: { has: skill as string } }),
       ...(search && {
@@ -108,6 +109,18 @@ export const getIdea = async (req: AuthRequest, res: Response) => {
   const isHolder = idea.holderId === userId;
   const isMember = isHolder || idea.members.some((m) => m.userId === userId);
 
+  // 如果是 Holder，单独查询该项目的申请列表
+  let applications = undefined;
+  if (isHolder) {
+    applications = await prisma.application.findMany({
+      where: { ideaId: id, status: { not: "WITHDRAWN" } },
+      include: {
+        user: { select: { id: true, name: true, avatar: true, bio: true, skills: true } },
+      },
+      orderBy: { createdAt: "desc" },
+    });
+  }
+
   // 检查是否为审批通过的 Viewer（只读权限）
   let isViewer = false;
   if (!isMember && userId) {
@@ -128,6 +141,7 @@ export const getIdea = async (req: AuthRequest, res: Response) => {
       ...idea,
       detail: undefined,
       documents: [],
+      applications,
     });
     return;
   }
@@ -140,6 +154,7 @@ export const getIdea = async (req: AuthRequest, res: Response) => {
       canEdit: false,
       canUpload: false,
       canDownload: false,
+      applications,
     });
     return;
   }
@@ -150,6 +165,7 @@ export const getIdea = async (req: AuthRequest, res: Response) => {
     canEdit: isHolder || isMember,
     canUpload: isHolder || isMember,
     canDownload: isHolder || isMember,
+    applications,
   });
 };
 

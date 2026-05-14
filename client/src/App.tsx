@@ -11,6 +11,7 @@ import Dashboard from "@/pages/Dashboard";
 import SpaceList from "@/pages/SpaceList";
 import SpaceDetail from "@/pages/SpaceDetail";
 import CreateIdea from "@/pages/CreateIdea";
+import EditIdea from "@/pages/EditIdea";
 
 function App() {
   const fetchUser = useAuthStore((s) => s.fetchUser);
@@ -28,6 +29,7 @@ function App() {
         <Route path="/ideas" element={<IdeaHub />} />
         <Route path="/ideas/:id" element={<IdeaDetail />} />
         <Route path="/ideas/create" element={<CreateIdea />} />
+        <Route path="/ideas/:id/edit" element={<EditIdea />} />
         <Route path="/spaces" element={<SpaceList />} />
         <Route path="/spaces/:id" element={<SpaceDetail />} />
         <Route path="/dashboard" element={<Dashboard />} />

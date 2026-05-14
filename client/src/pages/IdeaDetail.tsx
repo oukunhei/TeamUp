@@ -7,6 +7,7 @@ import {
   documentApi,
 } from "@/services/api";
 import { Idea, Application, Document } from "@/types";
+import ApplicationDetailModal from "@/components/ApplicationDetailModal";
 import {
   Loader2,
   Users,
@@ -23,6 +24,7 @@ import {
   XCircle,
   Eye,
   ArrowUpCircle,
+  MessageSquare,
 } from "lucide-react";
 
 export default function IdeaDetail() {
@@ -85,6 +87,17 @@ export default function IdeaDetail() {
     }
   };
 
+  const handlePublish = async () => {
+    if (!id) return;
+    try {
+      await ideaApi.publish(id);
+      alert("发布成功");
+      fetchIdea();
+    } catch (err: any) {
+      alert(err.response?.data?.message || "发布失败");
+    }
+  };
+
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!id || !e.target.files?.[0]) return;
     const file = e.target.files[0];
@@ -142,13 +155,22 @@ export default function IdeaDetail() {
             </div>
           </div>
           {isHolder && (
-            <Link
-              to={`/ideas/${idea.id}`}
-              onClick={() => navigate(`/ideas/${idea.id}`)}
-              className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
-            >
-              编辑
-            </Link>
+            <div className="flex items-center gap-2">
+              {idea.status === "DRAFT" && (
+                <button
+                  onClick={handlePublish}
+                  className="text-sm bg-green-600 text-white hover:bg-green-700 px-3 py-1.5 rounded-lg"
+                >
+                  正式发布
+                </button>
+              )}
+              <Link
+                to={`/ideas/${idea.id}/edit`}
+                className="text-sm bg-gray-100 hover:bg-gray-200 px-3 py-1.5 rounded-lg"
+              >
+                编辑
+              </Link>
+            </div>
           )}
         </div>
 
@@ -273,62 +295,75 @@ function ApplicationRow({
   onReview: (id: string, status: "APPROVED" | "REJECTED" | "VIEWER", reply?: string) => void;
   onPromote: (id: string) => void;
 }) {
-  const [reply, setReply] = useState("");
+  const [showDetail, setShowDetail] = useState(false);
   if (app.status === "WITHDRAWN") return null;
 
   return (
-    <div className="bg-gray-50 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
-            {app.user?.name?.[0] || "?"}
+    <>
+      <div className="bg-gray-50 rounded-lg p-4">
+        <div className="flex items-center justify-between mb-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary-100 text-primary-700 flex items-center justify-center text-sm font-bold">
+              {app.user?.name?.[0] || "?"}
+            </div>
+            <div>
+              <p className="font-medium text-sm">{app.user?.name}</p>
+              <p className="text-xs text-gray-500">{app.user?.skills?.join(", ")}</p>
+            </div>
           </div>
-          <div>
-            <p className="font-medium text-sm">{app.user?.name}</p>
-            <p className="text-xs text-gray-500">{app.user?.skills?.join(", ")}</p>
-          </div>
+          <StatusBadge status={app.status} />
         </div>
-        <StatusBadge status={app.status} />
+        {app.message && (
+          <p className="text-sm text-gray-600 mb-2 line-clamp-2">{app.message}</p>
+        )}
+        <div className="flex items-center gap-2 mt-2">
+          <button
+            onClick={() => setShowDetail(true)}
+            className="text-xs bg-white border text-gray-700 px-3 py-1.5 rounded-md font-medium hover:bg-gray-50 flex items-center gap-1"
+          >
+            <MessageSquare className="w-3 h-3" /> 查看申请详情
+          </button>
+          {app.status === "PENDING" && (
+            <>
+              <button
+                onClick={() => onReview(app.id, "VIEWER")}
+                className="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-md font-medium hover:bg-amber-200 flex items-center gap-1"
+              >
+                <Eye className="w-3 h-3" /> 给只读权限
+              </button>
+              <button
+                onClick={() => onReview(app.id, "APPROVED")}
+                className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-md font-medium hover:bg-green-200 flex items-center gap-1"
+              >
+                <CheckCircle className="w-3 h-3" /> 直接通过
+              </button>
+              <button
+                onClick={() => onReview(app.id, "REJECTED")}
+                className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-md font-medium hover:bg-red-200 flex items-center gap-1"
+              >
+                <XCircle className="w-3 h-3" /> 拒绝
+              </button>
+            </>
+          )}
+          {app.isViewer && (
+            <button
+              onClick={() => onPromote(app.id)}
+              className="text-xs bg-primary-100 text-primary-700 px-3 py-1.5 rounded-md font-medium hover:bg-primary-200 flex items-center gap-1"
+            >
+              <ArrowUpCircle className="w-3 h-3" /> 升级为核心成员
+            </button>
+          )}
+        </div>
       </div>
-      {app.message && <p className="text-sm text-gray-600 mb-2">{app.message}</p>}
-      {app.status === "PENDING" && (
-        <div className="flex gap-2 mt-2">
-          <input
-            type="text"
-            placeholder="回复（可选）"
-            value={reply}
-            onChange={(e) => setReply(e.target.value)}
-            className="flex-1 border rounded-md px-3 py-1.5 text-sm"
-          />
-          <button
-            onClick={() => onReview(app.id, "VIEWER", reply)}
-            className="text-xs bg-amber-100 text-amber-700 px-3 py-1.5 rounded-md font-medium hover:bg-amber-200 flex items-center gap-1"
-          >
-            <Eye className="w-3 h-3" /> 给只读权限
-          </button>
-          <button
-            onClick={() => onReview(app.id, "APPROVED", reply)}
-            className="text-xs bg-green-100 text-green-700 px-3 py-1.5 rounded-md font-medium hover:bg-green-200 flex items-center gap-1"
-          >
-            <CheckCircle className="w-3 h-3" /> 直接通过
-          </button>
-          <button
-            onClick={() => onReview(app.id, "REJECTED", reply)}
-            className="text-xs bg-red-100 text-red-700 px-3 py-1.5 rounded-md font-medium hover:bg-red-200 flex items-center gap-1"
-          >
-            <XCircle className="w-3 h-3" /> 拒绝
-          </button>
-        </div>
+      {showDetail && (
+        <ApplicationDetailModal
+          app={app}
+          onReview={onReview}
+          onPromote={onPromote}
+          onClose={() => setShowDetail(false)}
+        />
       )}
-      {app.isViewer && (
-        <button
-          onClick={() => onPromote(app.id)}
-          className="text-xs bg-primary-100 text-primary-700 px-3 py-1.5 rounded-md font-medium hover:bg-primary-200 flex items-center gap-1 mt-2"
-        >
-          <ArrowUpCircle className="w-3 h-3" /> 升级为核心成员
-        </button>
-      )}
-    </div>
+    </>
   );
 }
 
